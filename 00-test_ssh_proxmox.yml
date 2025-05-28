@@ -1,0 +1,11 @@
+- name: Test SSH connection to Proxmox
+  hosts: proxmox
+  gather_facts: false
+  tasks:
+    - name: Run uname
+      command: uname -a
+      register: uname_out
+
+    - name: Show result
+      debug:
+        var: uname_out.stdout

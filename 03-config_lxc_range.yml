@@ -1,0 +1,27 @@
+- name: Crear y configurar LXC en Proxmox
+  hosts: proxmox
+  become: yes
+
+  tasks:
+  - name: Copiar script a proxmox host
+    tags: copy_script
+    ansible.builtin.copy :
+      src: "{{ script_local_path }}"
+      dest: "{{ script_proxmox_path }}"
+      mode: '0755'
+
+  - name: Copiar script al LXC rango
+    tags: copy_script_range
+    loop: "{{ range(lxc_base_id, lxc_base_id + total_lxc) | list }}"
+    loop_control:
+      loop_var: lxc_id
+    ansible.builtin.shell: >
+      pct push {{ lxc_id }} {{ script_proxmox_path }} {{ script_lxc_path }} &&
+      pct exec {{ lxc_id }} chmod +x {{ script_lxc_path }}
+
+  - name: Ejecutar script dentro del LXC rango
+    tags: run_script_range
+    loop: "{{ range(lxc_base_id, lxc_base_id + total_lxc) | list }}"
+    loop_control:
+      loop_var: lxc_id
+    ansible.builtin.shell: pct exec {{ lxc_id }} {{ script_lxc_path }}

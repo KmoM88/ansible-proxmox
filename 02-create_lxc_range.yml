@@ -1,0 +1,38 @@
+- name: Crear y configurar LXC en Proxmox
+  hosts: proxmox
+  become: yes
+
+  tasks:
+  - name: Crear contenedores LXC rango
+    tags: create_lxc_range
+    loop: "{{ range(lxc_base_id, lxc_base_id + total_lxc) | list }}"
+    loop_control:
+      loop_var: lxc_id
+    ansible.builtin.shell:
+      pct create {{ lxc_id }} {{ lxc_image }}
+      --rootfs {{ rootfs_storage }}:{{ rootfs_size }}
+      --swap {{ swap }}
+      --hostname lxc-{{ lxc_id }}
+      --memory {{ memory }}
+      --cores {{ cores }}
+      --cpulimit {{ cpu_limit }}
+      --net0 name=eth0,bridge={{ bridge_name }},ip={{ bridge_ip }}.{{ lxc_id }}/24,gw={{ bridge_gw}}
+      --password {{ lxc_password }}
+      --features nesting=1,keyctl=1
+    register: create_result
+    failed_when: "'already exists' not in create_result.stderr and create_result.rc != 0"
+
+  - name: Agregar mount en la config del LXC
+    tags: add_mount_lxc_range
+    loop: "{{ range(lxc_base_id, lxc_base_id + total_lxc) | list }}"
+    loop_control:
+      loop_var: lxc_id
+    ansible.builtin.shell: "echo 'lxc.apparmor.profile: unconfined\nlxc.cap.drop:\nlxc.cgroup.devices.allow: a\nlxc.mount.auto: proc:rw sys:rw\nunprivileged: 0' >> /etc/pve/lxc/{{ lxc_id }}.conf"
+
+  - name: Iniciar LXC rango
+    tags: start_lxc_range
+    loop: "{{ range(lxc_base_id, lxc_base_id + total_lxc) | list }}"
+    loop_control:
+      loop_var: lxc_id
+    ansible.builtin.shell: pct start {{ lxc_id }}
+

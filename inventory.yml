@@ -1,0 +1,6 @@
+all:
+  hosts:
+    proxmox:
+      ansible_host: 192.168.30.150
+      ansible_user: root
+      ansible_connection: ssh

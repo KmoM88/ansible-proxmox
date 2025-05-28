@@ -1,0 +1,18 @@
+- name: Crear y configurar LXC en Proxmox
+  hosts: proxmox
+  become: yes
+
+  tasks:
+  - name: Frenar el contenedor LXC rango
+    tags: stop_lxc_range
+    loop: "{{ range(lxc_base_id, lxc_base_id + total_lxc) | list }}"
+    loop_control:
+      loop_var: lxc_id
+    ansible.builtin.shell: pct stop {{ lxc_id }}
+
+  - name: Eliminar el contenedor LXC rango
+    tags: delete_lxc_range
+    loop: "{{ range(lxc_base_id, lxc_base_id + total_lxc) | list }}"
+    loop_control:
+      loop_var: lxc_id
+    ansible.builtin.shell: pct destroy {{ lxc_id }}
