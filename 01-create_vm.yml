@@ -1,0 +1,24 @@
+- name: Crear y configurar VM en Proxmox
+  hosts: proxmox
+  become: yes
+
+  tasks:
+  - name: Crear VM
+    tags: create_vm
+    ansible.builtin.shell: "{{ item }}"
+    with_items:
+      - "qm create {{ vm_base_id }} --name vm-{{ vm_base_id }} --memory {{ memory }} --cores {{ cores }}"
+      - "qm disk import {{ vm_base_id }} {{ vm_image }} {{ rootfs_storage }}"
+      - "qm set {{ vm_base_id }} --scsihw virtio-scsi-pci --scsi0 {{ rootfs_storage }}:vm-{{ vm_base_id }}-disk-0"
+      - "qm set {{ vm_base_id }} --ide2 {{ rootfs_storage }}:cloudinit"
+      - "qm set {{ vm_base_id }} --boot order=scsi0 --serial0 socket --vga serial0"
+      - "qm set {{ vm_base_id }} --net0 virtio,bridge={{ bridge_name }}"
+      - "qm set {{ vm_base_id }} --ipconfig0 ip={{ bridge_ip }}.{{ vm_base_id }}/24,gw={{ bridge_gw }}"
+      - "qm set {{ vm_base_id }} --ciuser {{ ci_user }} --cipassword {{ ci_password }}"
+      - "qm set {{ vm_base_id }} --agent 1"
+    register: create_result
+    failed_when: "'already exists' not in create_result.stderr and create_result.rc != 0"
+
+  - name: Iniciar VM
+    tags: start_vm
+    ansible.builtin.shell: qm start {{ vm_base_id }}

@@ -1,4 +1,4 @@
-- name: Crear y configurar LXC en Proxmox
+- name: Eliminar LXC en Proxmox Rango
   hosts: proxmox
   become: yes
 

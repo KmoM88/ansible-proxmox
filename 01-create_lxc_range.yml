@@ -1,4 +1,4 @@
-- name: Crear y configurar LXC en Proxmox
+- name: Crear y configurar LXC en Proxmox Rango
   hosts: proxmox
   become: yes
 
@@ -22,7 +22,7 @@
     register: create_result
     failed_when: "'already exists' not in create_result.stderr and create_result.rc != 0"
 
-  - name: Agregar mount en la config del LXC
+  - name: Agregar mount en la config del LXC rango
     tags: add_mount_lxc_range
     loop: "{{ range(lxc_base_id, lxc_base_id + total_lxc) | list }}"
     loop_control:

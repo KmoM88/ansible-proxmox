@@ -1,0 +1,12 @@
+- name: Eliminar VM en Proxmox
+  hosts: proxmox
+  become: yes
+
+  tasks:
+  - name: Frenar VM
+    tags: stop_vm
+    ansible.builtin.shell: qm stop {{ vm_base_id }}
+
+  - name: Eliminar VM
+    tags: delete_vm
+    ansible.builtin.shell: qm destroy {{ vm_base_id }}
