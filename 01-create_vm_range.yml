@@ -12,11 +12,13 @@
       qm create {{ vm_id }} --name vm-{{ vm_id }} --memory {{ memory }} --cores {{ cores }} &&
       qm disk import {{ vm_id }} {{ vm_image }} {{ rootfs_storage }} &&
       qm set {{ vm_id }} --scsihw virtio-scsi-pci --scsi0 {{ rootfs_storage }}:vm-{{ vm_id }}-disk-0 &&
+      qm disk resize {{ vm_id }} scsi0 {{ rootfs_size }} &&
       qm set {{ vm_id }} --ide2 {{ rootfs_storage }}:cloudinit &&
       qm set {{ vm_id }} --boot order=scsi0 --serial0 socket --vga serial0 &&
       qm set {{ vm_id }} --net0 virtio,bridge={{ bridge_name }} &&
       qm set {{ vm_id }} --ipconfig0 ip={{ bridge_ip }}.{{ vm_id }}/24,gw={{ bridge_gw }} &&
       qm set {{ vm_id }} --ciuser {{ ci_user }} --cipassword {{ ci_password }} &&
+      qm set {{ vm_id }} --sshkeys {{ ssh_key_file }} &&
       qm set {{ vm_id }} --agent 1
     register: create_result
     failed_when: "'already exists' not in create_result.stderr and create_result.rc != 0"

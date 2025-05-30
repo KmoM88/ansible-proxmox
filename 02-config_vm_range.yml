@@ -1,0 +1,55 @@
+- name: Crear y configurar VM en Proxmox
+  hosts: proxmox
+  become: yes
+
+  tasks:
+  - name: Copiar script a proxmox host
+    tags: copy_script
+    ansible.builtin.copy:
+      src: "{{ script_local_path }}"
+      dest: "{{ script_proxmox_path }}"
+      mode: '0755'
+
+  - name: Copiar script al VM rango
+    tags: copy_script_range
+    loop: "{{ range(vm_base_id, vm_base_id + total_vm) | list }}"
+    loop_control:
+      loop_var: vm_id
+    ansible.builtin.shell: >
+      scp -o StrictHostKeyChecking=no {{ script_proxmox_path }} {{ ci_user }}@{{ bridge_ip }}.{{ vm_id }}:~/
+
+  - name: Ejecutar script dentro del VM rango
+    tags: run_script_range
+    loop: "{{ range(vm_base_id, vm_base_id + total_vm) | list }}"
+    loop_control:
+      loop_var: vm_id
+    ansible.builtin.shell: ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_id }} "sudo bash ~/install_basics.sh"
+    register: script_result
+    failed_when: script_result.rc != 0
+    changed_when: script_result.rc == 0
+
+  - name: Reiniciar VM rango
+    tags: restart_vm_range
+    loop: "{{ range(vm_base_id, vm_base_id + total_vm) | list }}"
+    loop_control:
+      loop_var: vm_id
+    ansible.builtin.shell: qm reboot {{ vm_id }}
+
+  - name: Inicializar Kubernetes control plane
+    tags: kubeadm_init
+    ansible.builtin.shell: >
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo kubeadm init --pod-network-cidr=10.244.0.0/16"
+  
+  - name: Inicializar Kubernetes control plane
+    tags: kubeadm_init_2
+    ansible.builtin.shell: >
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "mkdir -p /home/{{ ci_user }}/.kube" &&
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo cp -i /etc/kubernetes/admin.conf /home/{{ ci_user }}/.kube/config" &&
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo chown {{ ci_user }}:{{ ci_user }} /home/{{ ci_user }}/.kube/config" &&
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
+  
+  - name: Inicializar Kubernetes control plane
+    tags: kubeadm_init_3
+    ansible.builtin.shell: >
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo kubeadm token create --print-join-command > join_cmd"
+     

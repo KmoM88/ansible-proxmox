@@ -16,12 +16,12 @@
     loop_control:
       loop_var: lxc_id
     ansible.builtin.shell: >
-      pct push {{ lxc_id }} {{ script_proxmox_path }} {{ script_lxc_path }} &&
-      pct exec {{ lxc_id }} chmod +x {{ script_lxc_path }}
+      pct push {{ lxc_id }} {{ script_proxmox_path }} {{ script_path }} &&
+      pct exec {{ lxc_id }} chmod +x {{ script_path }}
 
   - name: Ejecutar script dentro del LXC rango
     tags: run_script_range
     loop: "{{ range(lxc_base_id, lxc_base_id + total_lxc) | list }}"
     loop_control:
       loop_var: lxc_id
-    ansible.builtin.shell: pct exec {{ lxc_id }} {{ script_lxc_path }}
+    ansible.builtin.shell: pct exec {{ lxc_id }} {{ script_path }}

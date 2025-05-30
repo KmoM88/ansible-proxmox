@@ -10,7 +10,7 @@
       loop_var: vm_id
     ansible.builtin.shell: qm stop {{ vm_id }}
 
-  - name: Eliminar VM
+  - name: Eliminar VM rango
     tags: delete_vm_range
     loop: "{{ range(vm_base_id, vm_base_id + total_vm) | list }}"
     loop_control:
