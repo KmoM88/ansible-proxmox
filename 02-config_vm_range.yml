@@ -10,6 +10,11 @@
       dest: "{{ script_proxmox_path }}"
       mode: '0755'
 
+  - name: Copiar script al VM master
+    tags: copy_script_master
+    ansible.builtin.shell: >
+      scp -o StrictHostKeyChecking=no {{ script_proxmox_path }} {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }}:~/
+      
   - name: Copiar script al VM rango
     tags: copy_script_range
     loop: "{{ range(vm_base_id, vm_base_id + total_vm) | list }}"
@@ -17,6 +22,13 @@
       loop_var: vm_id
     ansible.builtin.shell: >
       scp -o StrictHostKeyChecking=no {{ script_proxmox_path }} {{ ci_user }}@{{ bridge_ip }}.{{ vm_id }}:~/
+
+  - name: Ejecutar script dentro del VM master
+    tags: run_script_master
+    ansible.builtin.shell: ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo bash ~/install_basics.sh"
+    register: script_result
+    failed_when: script_result.rc != 0
+    changed_when: script_result.rc == 0
 
   - name: Ejecutar script dentro del VM rango
     tags: run_script_range
@@ -28,6 +40,10 @@
     failed_when: script_result.rc != 0
     changed_when: script_result.rc == 0
 
+  - name: Reiniciar VM master
+    tags: restart_vm_master
+    ansible.builtin.shell: qm reboot {{ vm_base_id }}
+  
   - name: Reiniciar VM rango
     tags: restart_vm_range
     loop: "{{ range(vm_base_id, vm_base_id + total_vm) | list }}"
@@ -35,41 +51,39 @@
       loop_var: vm_id
     ansible.builtin.shell: qm reboot {{ vm_id }}
 
-  - name: Inicializar Kubernetes control plane
-    tags: kubeadm_init
+  - name: Limpiar VM master
+    tags: cleanup_vm_master
     ansible.builtin.shell: >
-      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo kubeadm init --pod-network-cidr=10.244.0.0/16"
-  
-  - name: Inicializar Kubernetes control plane
-    tags: kubeadm_config
-    ansible.builtin.shell: >
-      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "mkdir -p /home/{{ ci_user }}/.kube" &&
-      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo cp -i /etc/kubernetes/admin.conf /home/{{ ci_user }}/.kube/config" &&
-      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo chown {{ ci_user }}:{{ ci_user }} /home/{{ ci_user }}/.kube/config" &&
-      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
-  
-  - name: Inicializar Kubernetes control plane
-    tags: kubeadm_join
-    ansible.builtin.shell: >
-      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo kubeadm token create --print-join-command > join_cmd"
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && sudo cloud-init clean && sudo rm -f /etc/ssh/ssh_host_* && sudo rm -f /var/lib/dhcp/* && sudo truncate -s 0 /etc/machine-id"
 
-  - name: Leer el comando de join desde el nodo master
-    tags: read_join_cmd
-    ansible.builtin.shell: >
-      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "cat /home/{{ ci_user }}/join_cmd" 2>/dev/null | tail -n 1
-    register: join_command
-    failed_when: join_command.rc != 0
+  - name: Apagar VM master
+    tags: stop_vm_master
+    ansible.builtin.shell: qm stop {{ vm_base_id }}
+  
+  - name: Apagar VM rango
+    tags: stop_vm_range
+    loop: "{{ range(vm_base_id, vm_base_id + total_vm) | list }}"
+    loop_control:
+      loop_var: vm_id
+    ansible.builtin.shell: qm stop {{ vm_id }}
 
-  - name: Ejecutar el comando de join en los nodos workers
-    tags: join_workers
+  - name: Crear template desde VM master
+    tags: template_vm_master
+    ansible.builtin.shell: qm template {{ vm_base_id }}
+
+  - name: Clonar VM rango
+    tags: clone_vm_range
     loop: "{{ range(vm_base_id + 1, vm_base_id + total_vm) | list }}"
     loop_control:
       loop_var: vm_id
-      label: "Nodo {{ bridge_ip }}.{{ vm_id }}"
-    ansible.builtin.shell: >
-      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_id }} "sudo {{ join_command.stdout }}"
-    register: worker_results
-    retries: 3
-    delay: 5
-    until: worker_results is success
-     
+    ansible.builtin.shell: qm clone {{ vm_base_id }} {{ vm_id }} --name vm-{{ vm_id }} &&
+      qm set {{ vm_id }} --ipconfig0 ip={{ bridge_ip }}.{{ vm_id }}/24,gw={{ bridge_gw }} &&
+      qm set {{ vm_id }} --ciuser {{ ci_user }} --cipassword {{ ci_password }} &&
+      qm set {{ vm_id }} --sshkeys {{ ssh_key_file }}
+
+  - name: Iniciar VM rango
+    tags: start_vm_range
+    loop: "{{ range(vm_base_id , vm_base_id + total_vm) | list }}"
+    loop_control:
+      loop_var: vm_id
+    ansible.builtin.shell: qm start {{ vm_id }}

@@ -16,3 +16,10 @@
     loop_control:
       loop_var: vm_id
     ansible.builtin.shell: qm destroy {{ vm_id }}
+
+  - name: Eliminar VM rango workers
+    tags: delete_vm_range_workers
+    loop: "{{ range(vm_base_id + 1, vm_base_id + total_vm) | list }}"
+    loop_control:
+      loop_var: vm_id
+    ansible.builtin.shell: qm destroy {{ vm_id }}
