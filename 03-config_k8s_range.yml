@@ -11,6 +11,7 @@
       ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo cp -i /etc/kubernetes/admin.conf /home/{{ ci_user }}/.kube/config" &&
       ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo chown {{ ci_user }}:{{ ci_user }} /home/{{ ci_user }}/.kube/config" &&
       ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml" &&
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.10/config/manifests/metallb-native.yaml" &&
       ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "sudo kubeadm token create --print-join-command > join_cmd"
 
   - name: Leer el comando de join desde el nodo master
@@ -34,4 +35,9 @@
     delay: 5
     until: worker_results is success
 
-     
+  - name: Copy conf from k8s master to local
+    tags: copy_conf
+    ansible.builtin.shell: >
+      scp -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }}:/home/{{ ci_user }}/.kube/config /root/config
+    register: copy_conf_result
+    failed_when: copy_conf_result.rc != 0

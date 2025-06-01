@@ -67,6 +67,7 @@
       loop_var: vm_id
     ansible.builtin.shell: qm stop {{ vm_id }}
 
+## Si se genera template no permite iniciarlo como master
   - name: Crear template desde VM master
     tags: template_vm_master
     ansible.builtin.shell: qm template {{ vm_base_id }}

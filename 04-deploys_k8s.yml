@@ -1,0 +1,53 @@
+- name: Deploy nginx con MetalLB y Kubernetes
+  hosts: proxmox
+  become: yes
+
+  tasks:
+  - name: Copiar Metallb a proxmox host
+    tags: copy_metallb
+    ansible.builtin.copy:
+      src: ./deployment/metallb.yml
+      dest: ./metallb.yml
+      mode: '0644'
+
+  - name: Copy and apply MetalLB configuration
+    tags: deploy_metallb
+    ansible.builtin.shell: >
+      scp -o StrictHostKeyChecking=no metallb.yml {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }}:/home/{{ ci_user }}/metallb.yml &&
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "kubectl apply -f /home/{{ ci_user }}/metallb.yml"
+    register: metallb_result
+    failed_when: metallb_result.rc != 0
+
+  - name: Wait for MetalLB to be ready
+    tags: wait_metallb_ready
+    ansible.builtin.shell: >
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "kubectl wait --for=condition=ready pod -l app=metallb --timeout=60s"
+    register: metallb_wait_result
+    retries: 5
+    delay: 10
+    until: metallb_wait_result is success
+    
+  - name: Copiar deploy a proxmox host
+    tags: copy_deploy
+    ansible.builtin.copy:
+      src: ./deployment/nginx-deployment.yml
+      dest: ./nginx-deployment.yml
+      mode: '0644'
+
+  - name: Copy and apply deployment nginx
+    tags: deploy_nginx
+    ansible.builtin.shell: >
+      scp -o StrictHostKeyChecking=no nginx-deployment.yml {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }}:/home/{{ ci_user }}/nginx-deployment.yml &&
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "kubectl apply -f /home/{{ ci_user }}/nginx-deployment.yml"
+    register: deploy_result
+    failed_when: deploy_result.rc != 0
+
+  - name: Wait for nginx pods to be ready
+    tags: wait_nginx_ready
+    ansible.builtin.shell: >
+      ssh -o StrictHostKeyChecking=no {{ ci_user }}@{{ bridge_ip }}.{{ vm_base_id }} "kubectl wait --for=condition=ready pod -l app=nginx --timeout=60s"
+    register: wait_result
+    retries: 5
+    delay: 10
+    until: wait_result is success
+  
